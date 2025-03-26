@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.stream.Stream;
@@ -32,7 +33,9 @@ public class ReportServiceImpl implements ReportService {
 
             log.info("Downloading bank data...");
             String header = "Report Generated " + new SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a").format(new Date());
-            byte[] byteData = excelHelper.exportToExcel(bankStream, header);
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            excelHelper.exportToExcel(bankStream, header, outputStream);
+            byte[] byteData = outputStream.toByteArray();
             log.info("Exporting excel completed. Time taken: {} ms", (System.currentTimeMillis() - startTime));
 
             return byteData;

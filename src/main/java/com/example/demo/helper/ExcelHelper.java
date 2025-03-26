@@ -4,14 +4,15 @@ import com.example.demo.utils.StringUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -23,10 +24,8 @@ public class ExcelHelper {
 
     private static final int BATCH_SIZE = 1000; // Batch size for processing rows
 
-    public <T> byte[] exportToExcel(Stream<T> dataStream, String header) {
-
+    public <T> void exportToExcel(Stream<T> dataStream, String header, OutputStream outputStream) {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(100);
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
              BufferedOutputStream bufferedOutput = new BufferedOutputStream(outputStream)) {
 
             Sheet sheet = workbook.createSheet("Data");
@@ -47,19 +46,15 @@ public class ExcelHelper {
 
             int rowIndex = 2; // Start after timestamp and header row
             int batchCount = 0;
-            List<T> batch = new ArrayList<>(BATCH_SIZE);
 
             do {
-                batch.add(firstElement);
+                Row row = sheet.createRow(rowIndex++);
+                populateRow(row, firstElement, fields);
                 batchCount++;
 
-                if (batchCount >= BATCH_SIZE || !iterator.hasNext()) {
-                    for (T data : batch) {
-                        Row row = sheet.createRow(rowIndex++);
-                        populateRow(row, data, fields);
-                    }
-                    batch.clear();
-                    batchCount = 0;
+                // Force flush rows periodically to free memory
+                if (batchCount % BATCH_SIZE == 0) {
+                    ((SXSSFSheet) sheet).flushRows(BATCH_SIZE);
                 }
             } while (iterator.hasNext() && (firstElement = iterator.next()) != null);
 
@@ -68,12 +63,12 @@ public class ExcelHelper {
 
             workbook.write(bufferedOutput);
             bufferedOutput.flush();
-            return outputStream.toByteArray();
         } catch (IOException e) {
             log.error("Error while exporting file: {}", e.getMessage(), e);
             throw new RuntimeException("Error while generating Excel file", e);
         }
     }
+
 
     public <T> byte[] exportToExcelWithoutStreaming(List<T> dataList, String header) {
         if (dataList == null || dataList.isEmpty()) {
